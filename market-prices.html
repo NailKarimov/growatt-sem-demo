@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Market prices decide what the inverter does</title>
+<style>
+:root{--bg:#080d18;--panel:#0e1627;--panel2:#121c31;--line:#1f2c47;--text:#e7ecf6;--mut:#8a97b3;
+--blue:#2f9bff;--green:#22c55e;--red:#ff5d5d;--orange:#ffa23a;--purple:#a78bfa;--cyan:#22d3ee;--yellow:#fbbf24}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.35 "Segoe UI",system-ui,sans-serif}
+body{min-width:1500px}
+.wrap{max-width:1860px;margin:0 auto;padding:16px 22px 20px}
+header{display:flex;align-items:flex-end;gap:24px;margin-bottom:10px}
+h1{font-size:23px;margin:0}header p{margin:2px 0 0;color:var(--mut);font-size:13px}
+.clock{margin-left:auto;text-align:right}.clock b{font:700 32px "Cascadia Mono",Consolas,monospace;color:#a9d4ff}
+.clock span{display:block;color:var(--mut);font-size:12px}
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.04em}
+.tag.plan{background:#3a2a0a;color:var(--yellow);border:1px solid #7a5a12}.tag.proven{background:#0f3322;color:#7be3a6;border:1px solid #1c7a45}
+.chapters{position:relative;height:46px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:12px;overflow:hidden}
+.chapters .seg{position:absolute;top:0;bottom:0;padding:6px 8px;border-right:1px solid #0a1220;font-size:12px;white-space:nowrap;overflow:hidden;color:#cfe1ff}
+.chapters .seg b{display:block;font-size:12.5px;color:#fff}
+.chapters .head{position:absolute;top:0;bottom:0;width:2px;background:#fff;box-shadow:0 0 10px #fff;z-index:3}
+.main{display:grid;grid-template-columns:1fr 440px;gap:14px}
+.stage{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:6px}
+.stage svg{display:block;width:100%;height:auto}
+.caption{margin:6px 8px 8px;padding:10px 16px;border-radius:12px;background:rgba(8,13,24,.88);border:1px solid var(--line);font-size:17px;min-height:46px}
+.caption.charge{border-color:var(--green)}.caption.export{border-color:var(--orange)}.caption.guard{border-color:var(--purple);background:rgba(36,22,66,.88)}
+.side{display:flex;flex-direction:column;gap:12px}
+.box{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:12px 14px}
+.box h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--mut)}
+.phase{display:grid;grid-template-columns:30px 1fr 64px;gap:8px;align-items:center;margin:6px 0}
+.bar{position:relative;height:20px;background:#0a1220;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--green)}
+.bar u{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--red);box-shadow:0 0 6px var(--red)}
+.num{font:700 15px "Cascadia Mono",Consolas,monospace;text-align:right}
+.badge{padding:6px 12px;border-radius:10px;font-weight:700;font-size:15px;border:1px solid;display:inline-block}
+.badge.charge{background:#0f3322;color:#7be3a6;border-color:#1c7a45}.badge.self{background:#0e2a4a;color:#8fc8ff;border-color:#1f6fb8}
+.badge.export{background:#3a2208;color:#ffc27a;border-color:#a8691f}.badge.guard{background:#27204a;color:#cbbcff;border-color:#6c56b8}
+.big{font:700 34px "Cascadia Mono",Consolas,monospace}.unit{color:var(--mut);font-size:14px;margin-left:4px}
+.row{display:flex;justify-content:space-between;align-items:baseline;margin:4px 0;color:var(--mut)}.row b{color:var(--text)}
+.log{font:12.5px "Cascadia Mono",Consolas,monospace;min-height:118px}
+.log div{padding:3px 0;border-bottom:1px dashed #1a2742;color:var(--mut)}.log div.new{color:#d9c8ff}
+.charts{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:12px}
+.chart{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:8px 8px 4px}
+.chart h4{margin:0 0 4px;font-size:12px;color:var(--mut);display:flex;justify-content:space-between;gap:4px}.chart h4 b{color:var(--text);white-space:nowrap}
+canvas{width:100%;height:140px;display:block}
+.ctl{display:flex;align-items:center;gap:14px;margin-top:10px;color:var(--mut);font-size:13px;flex-wrap:wrap}
+.ctl button,.ctl select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer}
+.ctl input[type=range]{width:130px}.ctl b{color:var(--text)}
+.clean .ctl,.clean .foot{display:none}
+.foot{margin-top:10px;color:var(--mut);font-size:12.5px;max-width:1700px}
+svg text{font-family:"Segoe UI",system-ui,sans-serif;fill:var(--text)}svg .m{fill:var(--mut)}svg .v{font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <header>
+    <div><h1>Market prices decide what the inverter does</h1>
+      <p>One day in 100 seconds, with <b>example</b> prices and a simulated house. Mode switch by one FC16 frame: <span class="tag proven">proven on site</span>
+      Price planner, Grid First (export), charge-rate guard: <span class="tag plan">planned, not tested yet</span></p></div>
+    <div class="clock"><b id="clock">00:00</b><span>one day = 100 s</span></div>
+  </header>
+
+  <div class="chapters" id="chapters"><div class="head" id="head"></div></div>
+
+  <div class="main">
+    <div class="stage">
+      <svg id="svg" viewBox="0 0 1060 590" role="img" aria-label="Market price enters the planner, which sets the inverter mode; the phase guard lowers the charge rate when one phase gets more load">
+        <defs><filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#6b7a9c"/></marker></defs>
+        <!-- control paths -->
+        <path id="p-price" d="M270,83 H330" fill="none" stroke="#2c3b5e" stroke-width="2.5" marker-end="url(#ah)"/>
+        <path id="p-dec"   d="M760,83 H830" fill="none" stroke="#2c3b5e" stroke-width="2.5" marker-end="url(#ah)"/>
+        <path id="p-cmd"   d="M935,142 V400 H802" fill="none" stroke="#3a2a60" stroke-width="2" stroke-dasharray="5 4"/>
+        <path id="p-meas"  d="M355,414 V525 H830" fill="none" stroke="#243350" stroke-width="2" stroke-dasharray="4 4"/>
+        <path id="p-gcmd"  d="M830,490 H690 V452" fill="none" stroke="#3a2a60" stroke-width="2" stroke-dasharray="5 4"/>
+        <!-- energy paths -->
+        <path id="p-pv" d="M250,240 H450" fill="none" stroke="#243350" stroke-width="3"/>
+        <path id="p-grid" d="M250,380 H450" fill="none" stroke="#243350" stroke-width="3"/>
+        <path id="p-house" d="M480,240 H580" fill="none" stroke="#243350" stroke-width="3"/>
+        <path id="p-bat" d="M480,390 H580" fill="none" stroke="#243350" stroke-width="3"/>
+        <g id="particles"></g>
+        <rect x="450" y="170" width="30" height="290" rx="10" fill="#0c3340" stroke="#1b8aa0" stroke-width="1.5"/>
+        <text x="465" y="158" text-anchor="middle" class="m" font-size="13">AC bus</text>
+        <!-- market -->
+        <g><rect x="30" y="24" width="240" height="118" rx="14" fill="#1c2433" stroke="#475569" stroke-width="1.6"/>
+          <text x="150" y="50" text-anchor="middle" class="m" font-size="13">Electricity market · day-ahead price</text>
+          <text id="t-price" x="150" y="92" text-anchor="middle" class="v" font-size="34">0.10</text>
+          <text x="150" y="112" text-anchor="middle" class="m" font-size="12">€ per kWh</text>
+          <rect id="chip" x="88" y="118" width="124" height="18" rx="9" fill="#13243f"/><text id="t-chip" x="150" y="131" text-anchor="middle" font-size="11.5" font-weight="700">NORMAL</text></g>
+        <!-- planner -->
+        <g><rect x="330" y="24" width="430" height="118" rx="14" fill="#1d1738" stroke="#6c56b8" stroke-width="1.8" stroke-dasharray="7 5"/>
+          <text x="545" y="48" text-anchor="middle" font-size="13" font-weight="700" fill="#cbbcff">Planner (our software) · planned</text>
+          <text id="t-r1" x="350" y="74" font-size="13" class="m">price ≤ 0.065 and battery < 90 %  →  CHARGE</text>
+          <text id="t-r2" x="350" y="94" font-size="13" class="m">price ≥ 0.30 and battery > 35 %   →  EXPORT</text>
+          <text id="t-r3" x="350" y="114" font-size="13" class="m">otherwise                                           →  SELF-USE</text>
+          <rect id="decbg" x="620" y="100" width="120" height="30" rx="8" fill="#0e2a4a"/><text id="t-dec" x="680" y="120" text-anchor="middle" font-size="14" font-weight="700">SELF-USE</text></g>
+        <!-- command -->
+        <g><rect x="830" y="24" width="210" height="118" rx="14" fill="#0e2a4a" stroke="#1f6fb8" stroke-width="1.6"/>
+          <text x="935" y="48" text-anchor="middle" class="m" font-size="13">Command to the inverters</text>
+          <text x="935" y="72" text-anchor="middle" font-size="12" class="m">TOU period 3, one FC16 frame</text>
+          <text id="t-words" x="935" y="98" text-anchor="middle" class="v" font-size="17" fill="#8fc8ff">0x8000, 0x173B</text>
+          <rect id="ptag" x="885" y="112" width="100" height="18" rx="9" fill="#0f3322"/><text id="t-ptag" x="935" y="125" text-anchor="middle" font-size="11" font-weight="700" fill="#7be3a6">proven</text></g>
+        <!-- PV, grid, meter -->
+        <g><rect x="30" y="190" width="220" height="100" rx="14" fill="#33260c" stroke="#a8791f" stroke-width="1.6"/>
+          <circle cx="76" cy="240" r="15" fill="#fbbf24"/><g id="rays" stroke="#fbbf24" stroke-width="3" stroke-linecap="round" transform="translate(76,240)">
+            <line x1="0" y1="-22" x2="0" y2="-29"/><line x1="0" y1="22" x2="0" y2="29"/><line x1="-22" y1="0" x2="-29" y2="0"/><line x1="22" y1="0" x2="29" y2="0"/></g>
+          <text x="150" y="226" class="m" font-size="13">Solar PV</text><text id="t-pv" x="120" y="266" class="v" font-size="26" fill="#ffd27a">0.0 kW</text></g>
+        <g><rect x="30" y="330" width="220" height="100" rx="14" fill="#1c2433" stroke="#475569" stroke-width="1.6"/>
+          <text x="140" y="356" text-anchor="middle" class="m" font-size="13">Grid</text><text id="t-grid" x="140" y="394" text-anchor="middle" class="v" font-size="26">0.0 kW</text>
+          <text id="t-gridsub" x="140" y="418" text-anchor="middle" class="m" font-size="12">imports</text></g>
+        <g><rect x="290" y="346" width="130" height="68" rx="12" fill="#2f2708" stroke="#8a6d0e" stroke-width="1.6"/>
+          <text x="355" y="367" text-anchor="middle" font-size="12.5" font-weight="700" fill="#f4d35e">SDM630 meter</text>
+          <text id="t-m" x="355" y="392" text-anchor="middle" font-size="14" font-weight="700">0 · 0 · 0 A</text></g>
+        <!-- house + inverters -->
+        <g><rect x="580" y="190" width="230" height="100" rx="14" fill="#0e2a4a" stroke="#1f6fb8" stroke-width="1.6"/>
+          <text x="695" y="214" text-anchor="middle" class="m" font-size="13">House load</text><text id="t-load" x="695" y="250" text-anchor="middle" class="v" font-size="26" fill="#8fc8ff">0.0 kW</text>
+          <g font-size="11.5" font-weight="700" text-anchor="middle"><rect id="c-boil" x="596" y="260" width="64" height="22" rx="7" fill="#13243f" stroke="#22406a"/><text x="628" y="276" class="m">boiler L1</text>
+            <rect id="c-hp" x="666" y="260" width="68" height="22" rx="7" fill="#13243f" stroke="#22406a"/><text x="700" y="276" class="m">heat pump L2</text>
+            <rect id="c-oven" x="740" y="260" width="62" height="22" rx="7" fill="#13243f" stroke="#22406a"/><text x="771" y="276" class="m">oven L3</text></g></g>
+        <g><rect x="580" y="330" width="230" height="122" rx="14" fill="#0e2a4a" stroke="#1f6fb8" stroke-width="1.6"/>
+          <text x="695" y="352" text-anchor="middle" class="m" font-size="12.5">Inverters SPH + MOD · battery</text>
+          <text id="t-bat" x="695" y="386" text-anchor="middle" class="v" font-size="26" fill="#7be3a6">0.0 kW</text>
+          <text id="t-mode" x="695" y="406" text-anchor="middle" class="m" font-size="12">self-use</text>
+          <rect x="610" y="418" width="170" height="14" rx="6" fill="#0a1220" stroke="#1f2c47"/><rect id="soc" x="610" y="418" width="30" height="14" rx="6" fill="#22c55e"/>
+          <text id="t-soc" x="695" y="444" text-anchor="middle" font-size="12" class="m">battery 20 %</text></g>
+        <!-- thresholds + savings -->
+        <g><rect x="830" y="170" width="210" height="96" rx="14" fill="#0e1627" stroke="#1f2c47" stroke-width="1.4"/>
+          <text x="935" y="194" text-anchor="middle" class="m" font-size="12.5">Saved so far today</text>
+          <text id="t-save" x="935" y="236" text-anchor="middle" class="v" font-size="32" fill="#7be3a6">0.00 €</text>
+          <text id="t-save2" x="935" y="256" text-anchor="middle" class="m" font-size="11.5">vs. plain self-use</text></g>
+        <g><rect x="830" y="280" width="210" height="100" rx="14" fill="#0e1627" stroke="#1f2c47" stroke-width="1.4"/>
+          <text x="935" y="304" text-anchor="middle" class="m" font-size="12.5">Money so far (€)</text>
+          <text id="t-c1" x="846" y="330" font-size="13" fill="#7be3a6">with planner:   0.00</text>
+          <text id="t-c2" x="846" y="352" font-size="13" fill="#8fa3c8">plain self-use: 0.00</text>
+          <text x="846" y="372" font-size="11" class="m">minus = earned by selling</text></g>
+        <!-- phase guard -->
+        <g><rect x="830" y="430" width="210" height="130" rx="14" fill="#1d1738" stroke="#6c56b8" stroke-width="1.8" stroke-dasharray="7 5"/>
+          <text x="935" y="454" text-anchor="middle" font-size="13" font-weight="700" fill="#cbbcff">Phase guard · planned</text>
+          <text id="t-g1" x="935" y="480" text-anchor="middle" font-size="13">worst phase 0 A · limit 16 A</text>
+          <text id="t-g2" x="935" y="504" text-anchor="middle" font-size="12.5" class="m">charge rate 30 % (4.6 kW)</text>
+          <text x="935" y="534" text-anchor="middle" font-size="11.5" class="m">write reg 3047 when one phase</text><text x="935" y="550" text-anchor="middle" font-size="11.5" class="m">gets more load (not tested yet)</text></g>
+        <text x="368" y="440" class="m" font-size="12">currents of 3 phases</text>
+        <text x="650" y="538" class="m" font-size="12">lower the charge rate</text>
+        <g id="pulses"></g>
+      </svg>
+      <div class="caption" id="caption"></div>
+    </div>
+
+    <aside class="side">
+      <div class="box"><h3>Grid current per phase</h3>
+        <div class="phase"><span>L1</span><div class="bar"><i id="b1"></i><u class="lim"></u></div><span class="num" id="a1">0 A</span></div>
+        <div class="phase"><span>L2</span><div class="bar"><i id="b2"></i><u class="lim"></u></div><span class="num" id="a2">0 A</span></div>
+        <div class="phase"><span>L3</span><div class="bar"><i id="b3"></i><u class="lim"></u></div><span class="num" id="a3">0 A</span></div>
+        <div class="row"><span>limit (red line)</span><b id="limtxt">16 A</b></div></div>
+      <div class="box"><h3>Inverter state</h3>
+        <div><span class="big" id="kw">0.0</span><span class="unit" id="kwu">kW</span></div>
+        <div style="margin:8px 0"><span class="badge self" id="badge">SELF-USE</span></div>
+        <div class="row"><span>battery</span><b id="socv">20 %</b></div>
+        <div class="row"><span>grid</span><b id="gimp">0 kW</b></div></div>
+      <div class="box"><h3>Decision log</h3><div class="log" id="log"></div></div>
+    </aside>
+  </div>
+
+  <div class="charts">
+    <div class="chart"><h4>Price €/kWh <b id="v1"></b></h4><canvas id="ch1"></canvas></div>
+    <div class="chart"><h4>Sun and house, kW <b id="v2"></b></h4><canvas id="ch2"></canvas></div>
+    <div class="chart"><h4>Battery power, kW <b id="v3"></b></h4><canvas id="ch3"></canvas></div>
+    <div class="chart"><h4>Battery, % <b id="v4"></b></h4><canvas id="ch4"></canvas></div>
+    <div class="chart"><h4>Worst phase current, A <b id="v5"></b></h4><canvas id="ch5"></canvas></div>
+    <div class="chart"><h4>Money, € <b id="v6"></b></h4><canvas id="ch6"></canvas></div>
+  </div>
+
+  <div class="ctl">
+    <button id="bplay">Pause</button><button id="brestart">Restart</button>
+    <label>speed <select id="sspeed"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select></label>
+    <label>charge below <input type="range" id="scheap" min="30" max="120" value="65"> <b id="vcheap">0.065</b></label>
+    <label>sell above <input type="range" id="ssell" min="150" max="400" value="300"> <b id="vsell">0.30</b></label>
+    <label>phase limit <input type="range" id="slimit" min="10" max="25" value="16"> <b id="vlimit">16 A</b></label>
+    <span>Space = pause · R = restart · add <code>?clean</code> to the address for recording</span>
+  </div>
+  <div class="foot">Not the real site. Prices are an invented "duck curve" (cheap at night and at midday, peaks in the morning and evening); the house, the sun and the
+    planner are simulated. Assumptions: battery 30 kWh (10 % to 100 %), full charge or discharge rate 4.6 kW, exported energy is paid at 90 % of the spot price,
+    the demo phase limit is 16 A (the site limit is 32 A). The mode words are those of <code>docs/inverter-control-settings.md</code>:
+    0x8000 Load First, 0xA000 Battery First, 0xC000 Grid First (only the first two were tested on the site).</div>
+</div>
+
+<script>
+"use strict";
+/* ---------------------------------------------------------------- model */
+const C = {V: 230, cap: 30, rate: 4.6, dt: 0.25, floorSelf: 0.10, floorSell: 0.35, target: 0.90, margin: 1.5, feed: 0.9, soc0: 0.20, maxPct: 30};
+const PRICE = [0.10,0.09,0.06,0.05,0.05,0.07,0.14,0.24,0.29,0.22,0.12,0.05,0.03,0.02,0.04,0.09,0.17,0.31,0.38,0.42,0.36,0.24,0.15,0.11,0.10];
+const price = h => { const i = Math.min(23, Math.floor(h)), f = h - i; return PRICE[i] * (1 - f) + PRICE[i + 1] * f; };
+const bump = (h, c, w) => Math.exp(-(((h - c) / w) ** 2));
+const pvKw = h => (h < 6.5 || h > 19.5) ? 0 : 6.0 * bump(h, 13, 3.2) * (1 - 0.45 * bump(h, 14.8, 0.45));
+const baseKw = h => 0.55 + 1.3 * bump(h, 8, 1.2) + 0.5 * bump(h, 13, 3) + 1.9 * bump(h, 19.8, 2.0);
+function appliances(h) {                                   // kW added to one phase
+  const e = [0, 0, 0];
+  if (h >= 3.5 && h < 4.25) e[0] += 3.0;                   // boiler on L1 (inside the cheap window)
+  if (h >= 5.25 && h < 5.75) e[1] += 2.2;                  // heat pump on L2
+  if (h >= 18.5 && h < 19.25) e[2] += 3.0;                 // oven on L3 (evening peak)
+  return e;
+}
+const A = P => P.map(x => Math.abs(x) * 1000 / C.V);
+
+function simulate(opt, planner) {
+  const steps = [], events = []; let soc = C.soc0, cost = 0, lastMode = "", lastPct = 100;
+  for (let i = 0; i < 96; i++) {
+    const h = i * C.dt, pr = price(h), pv = pvKw(h), b = baseKw(h), ex = appliances(h), L = ex.map(x => b / 3 + x), load = b + ex[0] + ex[1] + ex[2];
+    let mode = "SELF";
+    if (planner) { if (pr <= opt.cheap && soc < C.target) mode = "CHARGE"; else if (pr >= opt.sell && soc > C.floorSell) mode = "EXPORT"; }
+    let ch = 0, dis = 0, guard = false, pct = C.maxPct;
+    if (mode === "CHARGE") {
+      ch = C.rate; const I = A(L.map(x => x + ch / 3 - pv / 3)), Imax = Math.max(...I);
+      if (Imax > opt.limit - C.margin) { const need = (Imax - (opt.limit - C.margin)) * C.V * 3 / 1000; ch = Math.max(0, ch - need); guard = true; }
+      ch = Math.min(ch, (1 - soc) * C.cap / C.dt); pct = Math.round(ch / C.rate * C.maxPct);
+    } else if (mode === "EXPORT") dis = Math.min(C.rate, Math.max(0, (soc - C.floorSell) * C.cap / C.dt));
+    else { const sur = pv - load; if (sur > 0) ch = Math.min(C.rate, sur, (1 - soc) * C.cap / C.dt); else dis = Math.min(C.rate, -sur, Math.max(0, (soc - C.floorSelf) * C.cap / C.dt)); }
+    soc += (ch - dis) * C.dt / C.cap;
+    const grid = load + ch - pv - dis, P = L.map(x => x + ch / 3 - pv / 3 - dis / 3), I = A(P);
+    cost += grid > 0 ? grid * pr * C.dt : grid * pr * C.feed * C.dt;
+    steps.push({h, pr, pv, load, mode, ch, dis, soc: soc * 100, grid, I, Imax: Math.max(...I), guard, pct, cost, ex});
+    if (planner) {
+      if (mode !== lastMode) { events.push({h, kind: "mode", mode, pr, soc: soc * 100}); lastMode = mode; lastPct = 100; }
+      else if (mode === "CHARGE" && Math.abs(pct - lastPct) >= 2) { events.push({h, kind: "rate", pct, Imax: Math.max(...I)}); lastPct = pct; }
+    }
+  }
+  return {steps, events};
+}
+
+/* ---------------------------------------------------------------- state */
+const $ = id => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+if (q.has("clean")) $("wrap").classList.add("clean");
+const opt = {cheap: 0.065, sell: 0.30, limit: 16};
+let sim, base, runs = [];
+const view = {t: 0, playing: !(location.hash.indexOf("t=") >= 0), speed: 1, last: performance.now(), logged: 0};
+const MODECOL = {CHARGE: "#22c55e", SELF: "#2f9bff", EXPORT: "#ffa23a"};
+const MODELBL = {CHARGE: "CHARGE from the grid", SELF: "SELF-USE", EXPORT: "EXPORT (sell)"};
+const WORDS = {CHARGE: ["0xA000, 0x173B", "Battery First", "proven"], SELF: ["0x8000, 0x173B", "Load First", "proven"], EXPORT: ["0xC000, 0x173B", "Grid First", "planned"]};
+const hhmm = h => String(Math.floor(h)).padStart(2, "0") + ":" + String(Math.round((h % 1) * 60)).padStart(2, "0");
+
+function recompute() {
+  sim = simulate(opt, true); base = simulate(opt, false);
+  runs = []; sim.steps.forEach((s, i) => { const r = runs[runs.length - 1]; if (r && r.mode === s.mode) r.to = i + 1; else runs.push({mode: s.mode, from: i, to: i + 1}); });
+  const ch = $("chapters"); ch.querySelectorAll(".seg").forEach(e => e.remove());
+  runs.forEach(r => {
+    const d = document.createElement("div"); d.className = "seg"; const w = (r.to - r.from) / 96 * 100;
+    d.style.left = (r.from / 96 * 100) + "%"; d.style.width = w + "%"; d.style.background = MODECOL[r.mode] + "33";
+    d.style.borderTop = "3px solid " + MODECOL[r.mode];
+    d.innerHTML = w > 7 ? "<b>" + (r.mode === "CHARGE" ? "Charge" : r.mode === "EXPORT" ? "Sell" : "Self-use") + "</b>" + hhmm(r.from * C.dt) + "–" + hhmm(r.to * C.dt) : "";
+    ch.appendChild(d);
+  });
+}
+
+/* flows with a sign: a negative power makes the particles run backwards */
+const NS = "http://www.w3.org/2000/svg";
+const FLOWS = {pv: {path: "p-pv", color: "#ffd27a", kw: s => s.pv}, grid: {path: "p-grid", color: "#cbd5e1", kw: s => s.grid},
+               house: {path: "p-house", color: "#8fc8ff", kw: s => s.load}, bat: {path: "p-bat", color: "#7be3a6", kw: s => s.ch - s.dis}};
+Object.values(FLOWS).forEach(f => { f.el = $(f.path); f.len = f.el.getTotalLength(); f.parts = []; f.acc = 0; });
+const pulses = [];
+function moveParticles(dt, s) {
+  Object.values(FLOWS).forEach(f => {
+    const kw = s ? f.kw(s) : 0, dir = kw >= 0 ? 1 : -1;
+    f.acc += dt * Math.min(9, Math.abs(kw) * 1.6);
+    while (f.acc >= 1) { f.acc -= 1; const c = document.createElementNS(NS, "circle"); c.setAttribute("r", 4.5); c.setAttribute("fill", dir > 0 ? f.color : "#ffa23a");
+      c.setAttribute("filter", "url(#glow)"); $("particles").appendChild(c); f.parts.push({c, x: dir > 0 ? 0 : f.len, dir}); }
+    f.parts = f.parts.filter(p => { p.x += dt * 130 * p.dir; if (p.x < 0 || p.x > f.len) { p.c.remove(); return false; }
+      const pt = f.el.getPointAtLength(p.x); p.c.setAttribute("cx", pt.x); p.c.setAttribute("cy", pt.y); return true; });
+  });
+  for (let i = pulses.length - 1; i >= 0; i--) {
+    const p = pulses[i], len = p.el.getTotalLength(); p.x += dt * 300;
+    if (p.x >= len) { p.g.remove(); pulses.splice(i, 1); continue; }
+    const pt = p.el.getPointAtLength(p.x); p.g.setAttribute("transform", `translate(${pt.x},${pt.y})`);
+  }
+}
+function pulse(pathId, text, color) {
+  const g = document.createElementNS(NS, "g");
+  g.innerHTML = `<circle r="8" fill="${color}" filter="url(#glow)"/><text x="12" y="-10" font-size="12.5" font-weight="700" fill="#e1d7ff">${text}</text>`;
+  $("pulses").appendChild(g); pulses.push({g, x: 0, el: $(pathId)});
+}
+
+function drawChart(id, series, o, upto, bands) {
+  const cv = $(id), r = devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * r; cv.height = h * r; const x = cv.getContext("2d"); x.scale(r, r);
+  const L = 32, R = 4, T = 6, B = 15, X = hh => L + (w - L - R) * hh / 24, Y = v => T + (h - T - B) * (1 - (v - o.min) / (o.max - o.min));
+  if (bands) runs.forEach(rn => { x.fillStyle = MODECOL[rn.mode] + "26"; x.fillRect(X(rn.from * C.dt), T, X(rn.to * C.dt) - X(rn.from * C.dt), h - T - B); });
+  x.font = "10.5px Segoe UI"; x.lineWidth = 1; x.strokeStyle = "#1f2c47"; x.fillStyle = "#8a97b3";
+  for (let g = 0; g <= 4; g++) { const v = o.min + (o.max - o.min) * g / 4, y = Y(v); x.beginPath(); x.moveTo(L, y); x.lineTo(w - R, y); x.stroke(); x.fillText(v.toFixed(o.d), 1, y + 4); }
+  for (let g = 0; g <= 4; g++) x.fillText(String(g * 6).padStart(2, "0"), X(g * 6) - 6, h - 3);
+  (o.lines || []).forEach(l => { x.save(); x.setLineDash([5, 4]); x.strokeStyle = l.color; x.lineWidth = 1.4; x.beginPath(); x.moveTo(L, Y(l.v)); x.lineTo(w - R, Y(l.v)); x.stroke(); x.restore(); });
+  series.forEach(s => { x.strokeStyle = s.color; x.lineWidth = s.w || 2.2; x.setLineDash(s.dash || []); x.beginPath(); let first = true;
+    s.data.forEach(st => { if (st.h > upto) return; const px = X(st.h), py = Y(s.f(st)); first ? (x.moveTo(px, py), first = false) : x.lineTo(px, py); }); x.stroke(); });
+  x.setLineDash([]); x.strokeStyle = "#ffffff"; x.beginPath(); x.moveTo(X(upto), T); x.lineTo(X(upto), h - B); x.stroke();
+}
+
+function render() {
+  const idx = Math.min(95, Math.floor(view.t / 100 * 96)), s = sim.steps[idx], bs = base.steps[idx], h = view.t / 100 * 24;
+  $("clock").textContent = hhmm(h); $("head").style.left = (view.t / 100 * 100) + "%";
+  const exp = s.pr >= opt.sell, cheap = s.pr <= opt.cheap;
+  $("t-price").textContent = s.pr.toFixed(2); $("t-price").setAttribute("fill", exp ? "#ffc27a" : cheap ? "#7be3a6" : "#e7ecf6");
+  $("t-chip").textContent = exp ? "EXPENSIVE" : cheap ? "CHEAP" : "NORMAL"; $("t-chip").setAttribute("fill", exp ? "#ffc27a" : cheap ? "#7be3a6" : "#8a97b3");
+  $("chip").setAttribute("fill", exp ? "#3a2208" : cheap ? "#0f3322" : "#13243f");
+  $("t-r1").textContent = `price ≤ ${opt.cheap.toFixed(3)} and battery < 90 %  →  CHARGE`; $("t-r2").textContent = `price ≥ ${opt.sell.toFixed(2)} and battery > 35 %   →  EXPORT`;
+  $("t-dec").textContent = s.mode === "CHARGE" ? "CHARGE" : s.mode === "EXPORT" ? "EXPORT" : "SELF-USE"; $("t-dec").setAttribute("fill", MODECOL[s.mode]);
+  $("decbg").setAttribute("fill", MODECOL[s.mode] + "33");
+  const w = WORDS[s.mode]; $("t-words").textContent = w[0]; $("t-ptag").textContent = w[2] + " · " + w[1];
+  $("ptag").setAttribute("width", 150); $("ptag").setAttribute("x", 860); $("ptag").setAttribute("fill", w[2] === "proven" ? "#0f3322" : "#3a2a0a"); $("t-ptag").setAttribute("fill", w[2] === "proven" ? "#7be3a6" : "#fbbf24");
+  $("t-pv").textContent = s.pv.toFixed(1) + " kW"; $("t-load").textContent = s.load.toFixed(1) + " kW";
+  $("t-grid").textContent = Math.abs(s.grid).toFixed(1) + " kW"; $("t-gridsub").textContent = s.grid > 0.05 ? "imports from the grid" : s.grid < -0.05 ? "EXPORTS to the grid" : "idle";
+  $("t-grid").setAttribute("fill", s.grid < -0.05 ? "#ffc27a" : "#e7ecf6");
+  $("t-m").textContent = s.I.map(v => v.toFixed(0)).join(" · ") + " A";
+  const bat = s.ch - s.dis; $("t-bat").textContent = (bat >= 0 ? "+" : "−") + Math.abs(bat).toFixed(1) + " kW"; $("t-bat").setAttribute("fill", bat >= 0 ? "#7be3a6" : "#ffc27a");
+  $("t-mode").textContent = s.mode === "CHARGE" ? (s.guard ? "Battery First · rate CUT by the phase guard" : "Battery First · charging from the grid") : s.mode === "EXPORT" ? "Grid First · feeding the grid" : "Load First · self-use";
+  $("t-mode").setAttribute("fill", s.guard ? "#cbbcff" : "#8a97b3");
+  $("soc").setAttribute("width", Math.max(2, 170 * s.soc / 100)); $("t-soc").textContent = "battery " + s.soc.toFixed(0) + " %";
+  $("t-g1").textContent = "worst phase " + s.Imax.toFixed(1) + " A · limit " + opt.limit + " A";
+  $("t-g2").textContent = s.mode === "CHARGE" ? "charge rate " + s.pct + " % (" + s.ch.toFixed(1) + " kW)" : "no grid charging now";
+  $("t-g2").setAttribute("fill", s.guard ? "#cbbcff" : "#8a97b3");
+  $("rays").setAttribute("opacity", Math.min(1, s.pv / 2) * 0.8 + 0.1);
+  [["c-boil", s.ex[0] > 0], ["c-hp", s.ex[1] > 0], ["c-oven", s.ex[2] > 0]].forEach(([id, on]) => { $(id).setAttribute("fill", on ? "#7a3d0e" : "#13243f"); $(id).setAttribute("stroke", on ? "#ffa23a" : "#22406a"); });
+  const save = bs.cost - s.cost; $("t-save").textContent = (save >= 0 ? "+" : "−") + Math.abs(save).toFixed(2) + " €";
+  $("t-c1").textContent = "with planner:   " + s.cost.toFixed(2); $("t-c2").textContent = "plain self-use: " + bs.cost.toFixed(2);
+  // side
+  s.I.forEach((v, k) => { const bar = $("b" + (k + 1)); bar.style.width = Math.min(100, v / 25 * 100) + "%"; bar.style.background = v > opt.limit ? "#ff5d5d" : v > opt.limit - 3 ? "#fbbf24" : "#22c55e"; $("a" + (k + 1)).textContent = v.toFixed(1) + " A"; });
+  document.querySelectorAll(".bar u.lim").forEach(u => u.style.left = (opt.limit / 25 * 100) + "%");
+  $("kw").textContent = (bat >= 0 ? "+" : "−") + Math.abs(bat).toFixed(1); $("kwu").textContent = bat >= 0 ? "kW into the battery" : "kW out of the battery";
+  const b = $("badge"); b.className = "badge " + (s.guard ? "guard" : s.mode.toLowerCase()); b.textContent = s.guard ? "CHARGE · cut by the guard" : MODELBL[s.mode];
+  $("socv").textContent = s.soc.toFixed(0) + " %"; $("gimp").textContent = (s.grid >= 0 ? "import " : "export ") + Math.abs(s.grid).toFixed(1) + " kW";
+  // caption
+  const cap = $("caption"); let text, cls = "caption";
+  if (s.mode === "CHARGE" && s.guard) { cls += " guard"; text = `A boiler starts on L1: the grid current would be above ${opt.limit} A, so the phase guard cuts the charge rate to ${s.pct} %. The battery gets less, the fuse stays safe, the cheap hour is still used.`; }
+  else if (s.mode === "CHARGE") { cls += " charge"; text = s.pv > s.load + 1
+      ? `Price ${s.pr.toFixed(2)} €/kWh is below the charge threshold, and the sun is strong: the PV covers the house and most of the charging, the grid adds only ${Math.max(0, s.grid).toFixed(1)} kW.`
+      : `Price ${s.pr.toFixed(2)} €/kWh is below the charge threshold (${opt.cheap.toFixed(3)}): the inverters charge the battery from the grid at the full rate.`; }
+  else if (s.mode === "EXPORT") { cls += " export"; text = `Price ${s.pr.toFixed(2)} €/kWh is above the sell threshold (${opt.sell.toFixed(2)}): the battery feeds the grid, the money comes in.`; }
+  else if (s.pr >= 0.2) text = `Normal-to-high price ${s.pr.toFixed(2)}: self-use. The battery covers the house instead of buying expensive energy.`;
+  else text = s.pv > s.load ? "Self-use: the sun feeds the house and the surplus goes into the battery." : "Self-use: the sun and the battery feed the house, nothing is bought unless needed.";
+  cap.className = cls; cap.textContent = text;
+  // log + pulses
+  sim.events.forEach((e, n) => { if (e.h <= h + 1e-6 && n >= view.logged) { addLog(e); view.logged = n + 1;
+    if (view.playing) { if (e.kind === "mode") { pulse("p-dec", WORDS[e.mode][1], "#a78bfa"); pulse("p-cmd", WORDS[e.mode][0], "#a78bfa"); } else pulse("p-gcmd", "reg 3047 = " + e.pct + " %", "#a78bfa"); } } });
+  // charts
+  drawChart("ch1", [{data: sim.steps, f: x => x.pr, color: "#e7ecf6"}], {min: 0, max: 0.45, d: 2, lines: [{v: opt.cheap, color: "#22c55e"}, {v: opt.sell, color: "#ffa23a"}]}, h, true);
+  drawChart("ch2", [{data: sim.steps, f: x => x.pv, color: "#ffd27a"}, {data: sim.steps, f: x => x.load, color: "#8fc8ff"}], {min: 0, max: 8, d: 0}, h);
+  drawChart("ch3", [{data: sim.steps, f: x => x.ch - x.dis, color: "#7be3a6"}], {min: -5, max: 5, d: 0}, h);
+  drawChart("ch4", [{data: sim.steps, f: x => x.soc, color: "#7be3a6"}], {min: 0, max: 100, d: 0}, h);
+  drawChart("ch5", [{data: sim.steps, f: x => x.Imax, color: "#22d3ee"}], {min: 0, max: 25, d: 0, lines: [{v: opt.limit, color: "#ff5d5d"}]}, h);
+  drawChart("ch6", [{data: sim.steps, f: x => x.cost, color: "#7be3a6"}, {data: base.steps, f: x => x.cost, color: "#8fa3c8", dash: [5, 4], w: 1.8}], {min: -4, max: 2, d: 0}, h);
+  $("v1").textContent = s.pr.toFixed(2); $("v2").textContent = s.pv.toFixed(1) + " / " + s.load.toFixed(1); $("v3").textContent = bat.toFixed(1); $("v4").textContent = s.soc.toFixed(0);
+  $("v5").textContent = s.Imax.toFixed(1); $("v6").textContent = s.cost.toFixed(2) + " vs " + bs.cost.toFixed(2);
+}
+function addLog(e) {
+  const d = document.createElement("div"); d.className = "new";
+  d.textContent = e.kind === "mode" ? hhmm(e.h) + "  " + MODELBL[e.mode] + "  (price " + e.pr.toFixed(2) + ", battery " + e.soc.toFixed(0) + " %)  " + WORDS[e.mode][0]
+                                    : hhmm(e.h) + "  phase guard: L " + e.Imax.toFixed(1) + " A → charge rate " + e.pct + " %  (reg 3047)";
+  const log = $("log"); log.insertBefore(d, log.firstChild); while (log.children.length > 6) log.lastChild.remove();
+  setTimeout(() => d.classList.remove("new"), 3500);
+}
+function seek(t) {
+  view.t = t; view.logged = 0; $("log").innerHTML = ""; $("pulses").innerHTML = ""; pulses.length = 0; const h = t / 100 * 24;
+  sim.events.forEach((e, n) => { if (e.h <= h) view.logged = n + 1; }); sim.events.filter(e => e.h <= h).slice(-6).forEach(addLog);
+  const s = sim.steps[Math.min(95, Math.floor(t / 100 * 96))]; for (let n = 0; n < 80; n++) moveParticles(0.05, s);
+}
+function frame(now) {
+  const dt = Math.min(0.1, (now - view.last) / 1000); view.last = now;
+  if (view.playing) { view.t += dt * view.speed; if (view.t >= 100) seek(0); }
+  moveParticles(dt * (view.playing ? view.speed : 0.3), sim.steps[Math.min(95, Math.floor(view.t / 100 * 96))]);
+  render(); requestAnimationFrame(frame);
+}
+function changed() { const t = view.t; recompute(); seek(t); document.querySelectorAll(".bar u.lim").forEach(u => u.style.left = (opt.limit / 25 * 100) + "%"); $("limtxt").textContent = opt.limit + " A"; }
+$("bplay").onclick = () => { view.playing = !view.playing; $("bplay").textContent = view.playing ? "Pause" : "Play"; };
+$("brestart").onclick = () => seek(0);
+$("sspeed").onchange = e => view.speed = parseFloat(e.target.value);
+$("scheap").oninput = e => { opt.cheap = parseInt(e.target.value, 10) / 1000; $("vcheap").textContent = opt.cheap.toFixed(3); changed(); };
+$("ssell").oninput = e => { opt.sell = parseInt(e.target.value, 10) / 1000; $("vsell").textContent = opt.sell.toFixed(2); changed(); };
+$("slimit").oninput = e => { opt.limit = parseInt(e.target.value, 10); $("vlimit").textContent = opt.limit + " A"; changed(); };
+document.addEventListener("keydown", e => { if (e.code === "Space") { e.preventDefault(); $("bplay").click(); } if (e.key === "r" || e.key === "R") seek(0); });
+const mm = /t=(\d+(\.\d+)?)/.exec(location.hash);
+recompute();
+window.addEventListener("load", () => { seek(mm ? parseFloat(mm[1]) : 0); $("limtxt").textContent = opt.limit + " A"; if (!view.playing) $("bplay").textContent = "Play"; requestAnimationFrame(frame); });
+</script>
+</body>
+</html>

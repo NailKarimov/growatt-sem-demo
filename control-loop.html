@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Control loop: inputs change, the inverters follow</title>
+<style>
+:root{--bg:#080d18;--panel:#0e1627;--panel2:#121c31;--line:#1f2c47;--text:#e7ecf6;--mut:#8a97b3;
+--blue:#2f9bff;--green:#22c55e;--red:#ff5d5d;--orange:#ffa23a;--purple:#a78bfa;--cyan:#22d3ee;--yellow:#fbbf24}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.35 "Segoe UI",system-ui,sans-serif}
+body{min-width:1500px}
+.wrap{max-width:1860px;margin:0 auto;padding:16px 22px 20px}
+header{display:flex;align-items:flex-end;gap:24px;margin-bottom:10px}
+h1{font-size:23px;margin:0}header p{margin:2px 0 0;color:var(--mut);font-size:13px}
+.clock{margin-left:auto;text-align:right}.clock b{font:700 30px "Cascadia Mono",Consolas,monospace;color:#a9d4ff}
+.clock span{display:block;color:var(--mut);font-size:12px}
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.04em}
+.tag.plan{background:#3a2a0a;color:var(--yellow);border:1px solid #7a5a12}.tag.proven{background:#0f3322;color:#7be3a6;border:1px solid #1c7a45}
+/* chapter bar */
+.chapters{position:relative;height:46px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin-bottom:12px;overflow:hidden}
+.chapters .seg{position:absolute;top:0;bottom:0;padding:6px 8px;border-right:1px solid var(--line);font-size:12px;color:var(--mut);white-space:nowrap;overflow:hidden}
+.chapters .seg b{display:block;color:var(--text);font-size:12.5px}
+.chapters .head{position:absolute;top:0;bottom:0;width:2px;background:var(--blue);box-shadow:0 0 10px var(--blue);z-index:3}
+.main{display:grid;grid-template-columns:1fr 440px;gap:14px}
+.stage{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:6px;position:relative}
+.stage svg{display:block;width:100%;height:auto}
+.caption{margin:6px 8px 8px;padding:10px 16px;border-radius:12px;background:rgba(8,13,24,.88);border:1px solid var(--line);font-size:17px;min-height:46px}
+.caption.alert{border-color:var(--red);background:rgba(60,14,14,.88)}.caption.act{border-color:var(--purple);background:rgba(36,22,66,.88)}
+.side{display:flex;flex-direction:column;gap:12px}
+.box{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:12px 14px}
+.box h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--mut)}
+.phase{display:grid;grid-template-columns:30px 1fr 64px;gap:8px;align-items:center;margin:6px 0}
+.bar{position:relative;height:20px;background:#0a1220;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--green);transition:background .15s}
+.bar u{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--red);box-shadow:0 0 6px var(--red)}
+.num{font:700 15px "Cascadia Mono",Consolas,monospace;text-align:right}
+.state{display:flex;align-items:center;gap:12px}
+.badge{padding:6px 12px;border-radius:10px;font-weight:700;font-size:15px;border:1px solid}
+.badge.ok{background:#0f3322;color:#7be3a6;border-color:#1c7a45}.badge.lim{background:#3a2a0a;color:var(--yellow);border-color:#7a5a12}
+.badge.over{background:#3d1616;color:#ff9a9a;border-color:#b13c3c}
+.big{font:700 34px "Cascadia Mono",Consolas,monospace}.unit{color:var(--mut);font-size:14px;margin-left:4px}
+.row{display:flex;justify-content:space-between;align-items:baseline;margin:4px 0;color:var(--mut)}.row b{color:var(--text)}
+.log{font:12.5px "Cascadia Mono",Consolas,monospace;min-height:122px}
+.log div{padding:3px 0;border-bottom:1px dashed #1a2742;color:var(--mut)}.log div.new{color:#d9c8ff}
+.charts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:12px}
+.chart{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:8px 10px 6px}
+.chart h4{margin:0 0 4px;font-size:12.5px;color:var(--mut);display:flex;justify-content:space-between}.chart h4 b{color:var(--text)}
+canvas{width:100%;height:150px;display:block}
+.ctl{display:flex;align-items:center;gap:14px;margin-top:10px;color:var(--mut);font-size:13px;flex-wrap:wrap}
+.ctl button,.ctl select{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer}
+.ctl input[type=range]{width:160px}
+.clean .ctl,.clean .foot{display:none}
+.foot{margin-top:10px;color:var(--mut);font-size:12.5px;max-width:1700px}
+svg text{font-family:"Segoe UI",system-ui,sans-serif;fill:var(--text)}
+svg .m{fill:var(--mut)}svg .v{font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+  <header>
+    <div><h1>The control loop: inputs change, the inverters follow</h1>
+      <p>Illustration with <b>simulated</b> inputs. Mode switch by one FC16 frame: <span class="tag proven">proven on site</span>
+      Charge-rate command (register 3047) and this controller: <span class="tag plan">planned, not tested yet</span></p></div>
+    <div class="clock"><b id="clock">t = 0 s</b><span>one loop = 100 s</span></div>
+  </header>
+
+  <div class="chapters" id="chapters"><div class="head" id="head"></div></div>
+
+  <div class="main">
+    <div class="stage">
+      <svg id="svg" viewBox="0 0 1060 560" role="img" aria-label="Flow of power between PV, grid, the AC bus, the house and the inverters, with the controller reading the meter and sending a charge rate command to the inverters">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5b6b8c"/></marker>
+          <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <!-- paths of the flows (also used to move the particles) -->
+        <path id="p-pv"   d="M250,120 H500"                 fill="none" stroke="#243350" stroke-width="3"/>
+        <path id="p-grid" d="M250,330 H320 M450,330 H500"    fill="none" stroke="#243350" stroke-width="3"/>
+        <path id="p-gridfull" d="M250,330 H500"            fill="none" stroke="none"/>
+        <path id="p-house" d="M530,120 H790"                fill="none" stroke="#243350" stroke-width="3"/>
+        <path id="p-chg"  d="M530,330 H790"                 fill="none" stroke="#243350" stroke-width="3"/>
+        <path id="p-meas" d="M385,372 V452"                 fill="none" stroke="#243350" stroke-width="2" stroke-dasharray="4 4"/>
+        <path id="p-cmd"  d="M610,498 H910 V430"            fill="none" stroke="#3a2a60" stroke-width="2" stroke-dasharray="4 4"/>
+        <g id="particles"></g>
+        <!-- AC bus -->
+        <rect x="500" y="80" width="30" height="300" rx="10" fill="#0c3340" stroke="#1b8aa0" stroke-width="1.5"/>
+        <text x="515" y="64" text-anchor="middle" class="m" font-size="13">AC bus</text>
+        <!-- PV -->
+        <g id="n-pv"><rect x="40" y="60" width="210" height="120" rx="14" fill="#33260c" stroke="#a8791f" stroke-width="1.6"/>
+          <g id="sun" transform="translate(90,120)"><circle r="17" fill="#fbbf24"/><g id="rays" stroke="#fbbf24" stroke-width="3" stroke-linecap="round">
+            <line x1="0" y1="-26" x2="0" y2="-34"/><line x1="0" y1="26" x2="0" y2="34"/><line x1="-26" y1="0" x2="-34" y2="0"/><line x1="26" y1="0" x2="34" y2="0"/>
+            <line x1="-18" y1="-18" x2="-24" y2="-24"/><line x1="18" y1="18" x2="24" y2="24"/><line x1="-18" y1="18" x2="-24" y2="24"/><line x1="18" y1="-18" x2="24" y2="-24"/></g></g>
+          <g id="cloud" opacity="0"><ellipse cx="96" cy="112" rx="42" ry="20" fill="#51607f"/><ellipse cx="76" cy="122" rx="26" ry="16" fill="#5e6e8e"/><ellipse cx="118" cy="124" rx="28" ry="16" fill="#5e6e8e"/></g>
+          <text x="150" y="98" class="m" font-size="13">Solar PV</text><text id="t-pv" x="150" y="135" class="v" font-size="30" fill="#ffd27a">2.3 kW</text></g>
+        <!-- Grid + meter -->
+        <g><rect x="40" y="270" width="210" height="120" rx="14" fill="#1c2433" stroke="#475569" stroke-width="1.6"/>
+          <text x="145" y="302" text-anchor="middle" class="m" font-size="13">Grid</text><text id="t-grid" x="145" y="345" text-anchor="middle" class="v" font-size="30">0 kW</text>
+          <text id="t-gridsub" x="145" y="372" text-anchor="middle" class="m" font-size="12">imports</text></g>
+        <g><rect x="320" y="294" width="130" height="78" rx="12" fill="#2f2708" stroke="#8a6d0e" stroke-width="1.6"/>
+          <text x="385" y="316" text-anchor="middle" font-size="12.5" font-weight="700" fill="#f4d35e">SDM630 meter</text>
+          <text id="t-m" x="385" y="338" text-anchor="middle" font-size="13" class="m">L1 · L2 · L3</text><text id="t-m2" x="385" y="360" text-anchor="middle" font-size="14" font-weight="700">0 · 0 · 0 A</text></g>
+        <!-- House -->
+        <g><rect x="790" y="60" width="240" height="140" rx="14" fill="#0e2a4a" stroke="#1f6fb8" stroke-width="1.6"/>
+          <text x="910" y="90" text-anchor="middle" class="m" font-size="13">House load</text><text id="t-load" x="910" y="128" text-anchor="middle" class="v" font-size="30" fill="#8fc8ff">2.4 kW</text>
+          <g font-size="12" font-weight="700" text-anchor="middle">
+            <rect id="c-oven" x="806" y="150" width="62" height="30" rx="8" fill="#13243f" stroke="#22406a"/><text x="837" y="170" class="m">oven</text>
+            <rect id="c-ev" x="878" y="150" width="62" height="30" rx="8" fill="#13243f" stroke="#22406a"/><text x="909" y="170" class="m">EV</text>
+            <rect id="c-ket" x="950" y="150" width="62" height="30" rx="8" fill="#13243f" stroke="#22406a"/><text x="981" y="170" class="m">kettle</text></g></g>
+        <!-- Inverters + battery -->
+        <g><rect x="790" y="270" width="240" height="160" rx="14" fill="#0e2a4a" stroke="#1f6fb8" stroke-width="1.6"/>
+          <text x="910" y="296" text-anchor="middle" class="m" font-size="13">Inverters SPH + MOD · battery</text>
+          <text id="t-chg" x="910" y="338" text-anchor="middle" class="v" font-size="30" fill="#7be3a6">4.6 kW</text>
+          <text id="t-mode" x="910" y="362" text-anchor="middle" class="m" font-size="12.5">Battery First · charging from the grid</text>
+          <rect x="820" y="382" width="180" height="16" rx="6" fill="#0a1220" stroke="#1f2c47"/><rect id="soc" x="820" y="382" width="30" height="16" rx="6" fill="#22c55e"/>
+          <text id="t-soc" x="910" y="418" text-anchor="middle" font-size="12.5" class="m">battery 11.0 %</text></g>
+        <!-- Controller -->
+        <g><rect x="300" y="452" width="310" height="92" rx="14" fill="#1d1738" stroke="#6c56b8" stroke-width="1.8" stroke-dasharray="7 5"/>
+          <text x="455" y="478" text-anchor="middle" font-size="13" font-weight="700" fill="#cbbcff">Controller (our software) · planned</text>
+          <text id="t-ctl" x="455" y="504" text-anchor="middle" font-size="14">I max 0 A · limit 18 A</text>
+          <text id="t-ctl2" x="455" y="528" text-anchor="middle" font-size="13" class="m">charge rate command: 30 %</text></g>
+        <text x="392" y="415" class="m" font-size="12">currents</text>
+        <text x="760" y="490" class="m" font-size="12">command over RS485</text>
+        <text x="760" y="508" class="m" font-size="12" fill="#cbbcff">write reg 3047  (not tested yet)</text>
+        <g id="pulses"></g>
+      </svg>
+      <div class="caption" id="caption"></div>
+    </div>
+
+    <aside class="side">
+      <div class="box"><h3>Grid current per phase</h3>
+        <div class="phase"><span>L1</span><div class="bar"><i id="b1"></i><u class="lim"></u></div><span class="num" id="a1">0 A</span></div>
+        <div class="phase"><span>L2</span><div class="bar"><i id="b2"></i><u class="lim"></u></div><span class="num" id="a2">0 A</span></div>
+        <div class="phase"><span>L3</span><div class="bar"><i id="b3"></i><u class="lim"></u></div><span class="num" id="a3">0 A</span></div>
+        <div class="row"><span>limit (red line)</span><b id="limtxt">18 A</b></div></div>
+      <div class="box"><h3>Inverter state</h3>
+        <div class="state"><span class="big" id="kw">4.6</span><span class="unit">kW into the battery</span></div>
+        <div style="margin:8px 0"><span class="badge ok" id="badge">charging · full rate</span></div>
+        <div class="row"><span>command from the controller</span><b id="cmd">30 % of 12 kW</b></div>
+        <div class="row"><span>grid import</span><b id="gimp">0 kW</b></div></div>
+      <div class="box"><h3>Controller log</h3><div class="log" id="log"></div></div>
+    </aside>
+  </div>
+
+  <div class="charts">
+    <div class="chart"><h4>Sun and house, kW <b id="v1"></b></h4><canvas id="ch1"></canvas></div>
+    <div class="chart"><h4>Grid current, worst phase, A <b id="v2"></b></h4><canvas id="ch2"></canvas></div>
+    <div class="chart"><h4>Charge power and command, kW <b id="v3"></b></h4><canvas id="ch3"></canvas></div>
+    <div class="chart"><h4>Battery, % <b id="v4"></b></h4><canvas id="ch4"></canvas></div>
+  </div>
+
+  <div class="ctl">
+    <button id="bplay">Pause</button><button id="brestart">Restart</button>
+    <label>speed <select id="sspeed"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select></label>
+    <label>grid limit <input type="range" id="slimit" min="10" max="30" value="18"> <b id="slimv" style="color:var(--text)">18 A per phase</b></label>
+    <span>Space = pause · R = restart · add <code>?clean</code> to the address for recording</span>
+  </div>
+  <div class="foot">Not the real site: sun, house load and the controller are simulated (parameters in the script). Real measurements of
+    the charging step are in <code>docs/experiments.md</code>. The demo limit is 18 A so that it triggers; the site limit is 32 A per phase.
+    Assumptions: battery 30 kWh, rated power 12 kW, charge rate 30 % = 4.6 kW, the inverter follows a new rate at 1.2 kW/s.</div>
+</div>
+
+<script>
+"use strict";
+/* ---------------------------------------------------------------- model */
+const C = {dt: 0.5, T: 100, V: 230, rated: 12, maxPct: 30, margin: 1.5, rampPct: 2, slew: 1.2, delay: 1.0, capKwh: 30, soc0: 11};
+const sm = x => x * x * (3 - 2 * x);
+const ramp = (t, a, b) => t <= a ? 0 : t >= b ? 1 : sm((t - a) / (b - a));
+
+function pvKw(t) {                                       // sun, with two clouds
+  let v = 2.3 + 0.08 * Math.sin(t / 3.1);
+  v -= 1.95 * (ramp(t, 12, 17) - ramp(t, 28, 34));
+  v -= 1.0 * (ramp(t, 70, 73) - ramp(t, 77, 81));
+  return Math.max(0.05, v);
+}
+function loads(t) {                                      // kW per phase, plus the appliances that are on
+  const base = 2.4 + 0.15 * Math.sin(t / 4.3), p = [base / 3, base / 3, base / 3];
+  const oven = 3.0 * (ramp(t, 30, 31) - ramp(t, 48, 49));          // one phase
+  const ev = 2.4 * (ramp(t, 34, 35) - ramp(t, 56, 57));            // three phases
+  const ket = 3.0 * (ramp(t, 64, 64.5) - ramp(t, 69, 69.5));       // one phase
+  p[0] += oven + ev / 3; p[1] += ev / 3 + ket; p[2] += ev / 3;
+  return {p, oven: oven > .3, ev: ev > .3, ket: ket > .3};
+}
+const phaseKw = (L, chg, pv) => L.map(x => x + chg / 3 - pv / 3);
+const amps = P => P.map(x => Math.max(0, x) * 1000 / C.V);
+
+function simulate(limit) {
+  const steps = [], cmds = [], pend = []; let pct = C.maxPct, applied = pct, kw = pct / 100 * C.rated, soc = C.soc0, ctlSec = -1;
+  for (let i = 0; i <= C.T / C.dt; i++) {
+    const t = i * C.dt, pv = pvKw(t), Ld = loads(t);
+    if (Math.floor(t) !== ctlSec) {                      // the controller runs once a second, on the COMMANDED rate (no wind-up)
+      ctlSec = Math.floor(t);
+      const cmdKw = pct / 100 * C.rated, I = amps(phaseKw(Ld.p, cmdKw, pv)), Imax = Math.max(...I);
+      let np = pct;
+      if (Imax > limit - C.margin) {
+        const need = (Imax - (limit - C.margin)) * C.V * 3 / 1000;
+        np = Math.min(pct, Math.max(0, Math.round((cmdKw - need) / C.rated * 100)));
+      } else if (Imax < limit - 5 && pct < C.maxPct) np = Math.min(C.maxPct, pct + C.rampPct);
+      if (np !== pct) { cmds.push({t, from: pct, pct: np, Imax, ph: I.indexOf(Imax) + 1}); pct = np; pend.push({at: t + C.delay, pct: np}); }
+    }
+    while (pend.length && pend[0].at <= t) applied = pend.shift().pct;       // the command reaches the inverters after a delay
+    const target = applied / 100 * C.rated, d = target - kw, ms = C.slew * C.dt;      // the inverter follows with a slew rate
+    kw += Math.abs(d) <= ms ? d : Math.sign(d) * ms;
+    const P = phaseKw(Ld.p, kw, pv), I = amps(P); soc += kw * C.dt / 3600 / C.capKwh * 100;
+    steps.push({t, pv, load: Ld.p.reduce((a, b) => a + b, 0), app: Ld, pct, applied, kw, grid: Math.max(0, P.reduce((a, b) => a + b, 0)), I, Imax: Math.max(...I),
+                over: Math.max(...I) > limit, soc});
+  }
+  return {steps, cmds};
+}
+
+/* ---------------------------------------------------------------- narration */
+const CHAPTERS = [
+  [0, 12, "Sun", "Grid charging at 30 % (4.6 kW)"],
+  [12, 30, "Cloud", "PV drops, the grid supplies more"],
+  [30, 34, "Oven on", "3 kW on one phase"],
+  [34, 48, "EV charger", "Charging held back"],
+  [48, 56, "Oven off", "Charge rate is raised again"],
+  [56, 64, "EV off", "Back to full rate"],
+  [64, 70, "Kettle", "Short peak on L2"],
+  [70, 82, "Small cloud", "Nothing to do"],
+  [82, 100, "Sun back", "The loop restarts"]
+];
+const TEXT = [
+  "Sun is out. The inverters charge the battery from the grid at 30 % (4.6 kW); the grid supplies the house and the battery.",
+  "A cloud passes: PV falls from 2.3 to 0.4 kW, so the grid has to supply more. The current is still far below the limit.",
+  "The oven switches on (3 kW on ONE phase): the current on L1 jumps.",
+  "The EV charger starts as well: the charging is already reduced, the controller keeps the current just under the limit.",
+  "The oven is off: the current falls and the controller raises the charge rate again, step by step.",
+  "The EV charger is off: back to the full charging rate.",
+  "A kettle (3 kW) on L2: a short peak above the limit, so the charge rate is cut again.",
+  "A small cloud: PV dips, the current stays below the limit, no command is needed.",
+  "The sun is back, charging continues at 30 %. The loop restarts."
+];
+
+/* ---------------------------------------------------------------- view */
+const $ = id => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+if (q.has("clean")) $("wrap").classList.add("clean");
+let limit = 18, sim = simulate(limit);
+const view = {t: 0, playing: !(location.hash.indexOf("t=") >= 0), speed: 1, last: performance.now(), logged: 0, lastCmdT: -99};
+
+// chapter bar
+CHAPTERS.forEach(([a, b, name, sub]) => {
+  const d = document.createElement("div"); d.className = "seg";
+  d.style.left = (a / C.T * 100) + "%"; d.style.width = ((b - a) / C.T * 100) + "%";
+  d.innerHTML = "<b>" + name + "</b>" + ((b - a) >= 9 ? sub : ""); $("chapters").appendChild(d);
+});
+
+// flows: particles moving along the paths, their number follows the power
+const FLOWS = {
+  pv: {path: "p-pv", color: "#ffd27a", kw: s => s.pv},
+  grid: {path: "p-gridfull", color: "#cbd5e1", kw: s => s.grid},
+  house: {path: "p-house", color: "#8fc8ff", kw: s => s.load},
+  chg: {path: "p-chg", color: "#7be3a6", kw: s => s.kw}
+};
+const NS = "http://www.w3.org/2000/svg";
+Object.values(FLOWS).forEach(f => { f.el = $(f.path); f.len = f.el.getTotalLength(); f.parts = []; f.acc = 0; });
+const pulses = [];
+
+function moveParticles(dt, s) {
+  Object.values(FLOWS).forEach(f => {
+    f.acc += dt * Math.min(9, s ? f.kw(s) * 1.5 : 0);
+    while (f.acc >= 1) { f.acc -= 1; const c = document.createElementNS(NS, "circle"); c.setAttribute("r", 4.5); c.setAttribute("fill", f.color);
+      c.setAttribute("filter", "url(#glow)"); $("particles").appendChild(c); f.parts.push({c, x: 0}); }
+    f.parts = f.parts.filter(p => { p.x += dt * 150; if (p.x >= f.len) { p.c.remove(); return false; }
+      const pt = f.el.getPointAtLength(p.x); p.c.setAttribute("cx", pt.x); p.c.setAttribute("cy", pt.y); return true; });
+  });
+  const cp = $("p-cmd"), cl = cp.getTotalLength();
+  for (let i = pulses.length - 1; i >= 0; i--) {
+    const p = pulses[i]; p.x += dt * 330;
+    if (p.x >= cl) { p.g.remove(); pulses.splice(i, 1); continue; }
+    const pt = cp.getPointAtLength(p.x); p.g.setAttribute("transform", `translate(${pt.x},${pt.y})`);
+  }
+}
+function sendPulse(text) {
+  const g = document.createElementNS(NS, "g");
+  g.innerHTML = `<circle r="8" fill="#a78bfa" filter="url(#glow)"/><text x="-84" y="-14" font-size="12.5" font-weight="700" fill="#e1d7ff">${text}</text>`;
+  $("pulses").appendChild(g); pulses.push({g, x: 0});
+}
+
+function drawChart(id, series, opt, upto) {
+  const cv = $(id), r = devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * r; cv.height = h * r; const x = cv.getContext("2d"); x.scale(r, r);
+  const L = 34, R = 6, T = 6, B = 16, X = t => L + (w - L - R) * t / C.T, Y = v => T + (h - T - B) * (1 - (v - opt.min) / (opt.max - opt.min));
+  x.font = "11px Segoe UI"; x.lineWidth = 1; x.strokeStyle = "#1f2c47"; x.fillStyle = "#8a97b3";
+  for (let g = 0; g <= 4; g++) { const v = opt.min + (opt.max - opt.min) * g / 4, y = Y(v); x.beginPath(); x.moveTo(L, y); x.lineTo(w - R, y); x.stroke(); x.fillText(v.toFixed(opt.d), 2, y + 4); }
+  for (let g = 0; g <= 4; g++) x.fillText(Math.round(C.T * g / 4) + "s", X(C.T * g / 4) - 8, h - 3);
+  if (opt.limit !== undefined) { x.save(); x.setLineDash([6, 4]); x.strokeStyle = "#ff5d5d"; x.lineWidth = 1.5; x.beginPath(); x.moveTo(L, Y(opt.limit)); x.lineTo(w - R, Y(opt.limit)); x.stroke(); x.restore(); }
+  series.forEach(s => {
+    x.strokeStyle = s.color; x.lineWidth = s.w || 2.2; x.setLineDash(s.dash || []); x.beginPath();
+    let first = true; sim.steps.forEach(st => { if (st.t > upto) return; const px = X(st.t), py = Y(s.f(st)); first ? (x.moveTo(px, py), first = false) : x.lineTo(px, py); }); x.stroke();
+  });
+  x.setLineDash([]); x.strokeStyle = "#2f9bff"; x.beginPath(); x.moveTo(X(upto), T); x.lineTo(X(upto), h - B); x.stroke();
+}
+
+function render() {
+  const i = Math.min(sim.steps.length - 1, Math.floor(view.t / C.dt)), s = sim.steps[i], t = view.t;
+  $("clock").textContent = "t = " + Math.floor(t) + " s"; $("head").style.left = (t / C.T * 100) + "%";
+  // flows and numbers
+  $("t-pv").textContent = s.pv.toFixed(1) + " kW"; $("t-load").textContent = s.load.toFixed(1) + " kW";
+  $("t-grid").textContent = s.grid.toFixed(1) + " kW"; $("t-gridsub").textContent = s.grid > 0.05 ? "imports" : "idle";
+  $("t-m2").textContent = s.I.map(v => v.toFixed(0)).join(" · ") + " A";
+  $("t-chg").textContent = s.kw.toFixed(1) + " kW";
+  $("t-mode").textContent = s.applied >= C.maxPct ? "Battery First · full rate" : s.applied === 0 ? "Battery First · charging paused" : "Battery First · rate LIMITED to " + s.applied + " %";
+  $("t-mode").setAttribute("fill", s.applied >= C.maxPct ? "#8a97b3" : "#fbbf24");
+  $("soc").setAttribute("width", Math.max(2, 180 * s.soc / 100)); $("t-soc").textContent = "battery " + s.soc.toFixed(2) + " %";
+  $("t-ctl").textContent = "I max " + s.Imax.toFixed(1) + " A · limit " + limit + " A";
+  $("t-ctl2").textContent = "charge rate command: " + s.pct + " % (" + (s.pct / 100 * C.rated).toFixed(1) + " kW)";
+  $("t-ctl").setAttribute("fill", s.over ? "#ff9a9a" : "#e7ecf6");
+  const sunK = Math.min(1, s.pv / 2.3);
+  $("rays").setAttribute("opacity", 0.25 + 0.75 * sunK); $("sun").setAttribute("transform", `translate(90,120) rotate(${t * 20}) scale(${0.7 + 0.3 * sunK})`);
+  $("cloud").setAttribute("opacity", Math.min(1, Math.max(0, 1 - s.pv / 2.0)));
+  [["c-oven", s.app.oven], ["c-ev", s.app.ev], ["c-ket", s.app.ket]].forEach(([id, on]) => { $(id).setAttribute("fill", on ? "#7a3d0e" : "#13243f"); $(id).setAttribute("stroke", on ? "#ffa23a" : "#22406a"); });
+  // side panel
+  s.I.forEach((v, k) => { const bar = $("b" + (k + 1)); bar.style.width = Math.min(100, v / 30 * 100) + "%"; bar.style.background = v > limit ? "#ff5d5d" : v > limit - 3 ? "#fbbf24" : "#22c55e"; $("a" + (k + 1)).textContent = v.toFixed(1) + " A"; $("a" + (k + 1)).style.color = v > limit ? "#ff9a9a" : ""; });
+  document.querySelectorAll(".bar u.lim").forEach(u => u.style.left = (limit / 30 * 100) + "%");
+  $("kw").textContent = s.kw.toFixed(1); $("cmd").textContent = s.pct + " % of " + C.rated + " kW"; $("gimp").textContent = s.grid.toFixed(1) + " kW";
+  const b = $("badge"); b.className = "badge " + (s.over ? "over" : s.applied < C.maxPct ? "lim" : "ok");
+  b.textContent = s.over ? "LIMIT EXCEEDED" : s.applied === 0 ? "charging paused" : s.applied < C.maxPct ? "charging · limited" : "charging · full rate";
+  // caption
+  let k = CHAPTERS.findIndex(c => t >= c[0] && t < c[1]); if (k < 0) k = 0;
+  const recent = sim.cmds.filter(c => c.t <= t && t - c.t < 3.5).pop(), cap = $("caption");
+  if (s.over) { cap.className = "caption alert"; cap.textContent = "Grid current " + s.Imax.toFixed(1) + " A is above the limit of " + limit + " A. The controller sends a lower charge rate to the inverters."; }
+  else if (recent) { cap.className = "caption act"; cap.textContent = "Command to the inverters: charge rate " + recent.from + " % → " + recent.pct + " %. The inverters follow within seconds, the grid current falls."; }
+  else { cap.className = "caption"; cap.textContent = TEXT[k]; }
+  // log + pulses
+  sim.cmds.forEach((c, n) => { if (c.t <= t && n >= view.logged) { addLog(c); view.logged = n + 1; if (view.playing) sendPulse("reg 3047 = " + c.pct + " %"); } });
+  // charts
+  drawChart("ch1", [{f: s => s.pv, color: "#ffd27a"}, {f: s => s.load, color: "#8fc8ff"}], {min: 0, max: 12, d: 0}, t);
+  drawChart("ch2", [{f: s => s.Imax, color: "#22d3ee"}], {min: 0, max: 30, d: 0, limit}, t);
+  drawChart("ch3", [{f: s => s.kw, color: "#22c55e"}, {f: s => s.pct / 100 * C.rated, color: "#a78bfa", dash: [5, 4], w: 1.8}], {min: 0, max: 6, d: 0}, t);
+  drawChart("ch4", [{f: s => s.soc, color: "#7be3a6"}], {min: 10, max: 12, d: 1}, t);
+  $("v1").textContent = s.pv.toFixed(1) + " / " + s.load.toFixed(1); $("v2").textContent = s.Imax.toFixed(1) + " A"; $("v3").textContent = s.kw.toFixed(1) + " kW"; $("v4").textContent = s.soc.toFixed(2);
+}
+function addLog(c) {
+  const d = document.createElement("div"); d.className = "new";
+  d.textContent = "t=" + Math.floor(c.t) + "s  L" + c.ph + " " + c.Imax.toFixed(1) + " A  →  rate " + c.from + "% → " + c.pct + "%";
+  const log = $("log"); log.insertBefore(d, log.firstChild); while (log.children.length > 6) log.lastChild.remove();
+  setTimeout(() => d.classList.remove("new"), 3500);
+}
+
+function seek(t) {
+  view.t = t; view.logged = 0; $("log").innerHTML = ""; $("pulses").innerHTML = ""; pulses.length = 0;
+  sim.cmds.forEach((c, n) => { if (c.t <= t) { view.logged = n + 1; } });
+  sim.cmds.filter(c => c.t <= t).slice(-6).forEach(addLog);
+  const s = sim.steps[Math.min(sim.steps.length - 1, Math.floor(t / C.dt))];
+  for (let n = 0; n < 80; n++) moveParticles(0.05, s);
+}
+function frame(now) {
+  const dt = Math.min(0.1, (now - view.last) / 1000); view.last = now;
+  if (view.playing) { view.t += dt * view.speed; if (view.t >= C.T) { seek(0); } }
+  moveParticles(dt * (view.playing ? view.speed : 0.3), sim.steps[Math.min(sim.steps.length - 1, Math.floor(view.t / C.dt))]);
+  render(); requestAnimationFrame(frame);
+}
+
+/* controls */
+$("bplay").onclick = () => { view.playing = !view.playing; $("bplay").textContent = view.playing ? "Pause" : "Play"; };
+$("brestart").onclick = () => seek(0);
+$("sspeed").onchange = e => view.speed = parseFloat(e.target.value);
+$("slimit").oninput = e => { limit = parseInt(e.target.value, 10); $("slimv").textContent = limit + " A per phase"; $("limtxt").textContent = limit + " A"; const t = view.t; sim = simulate(limit); seek(t); };
+document.addEventListener("keydown", e => { if (e.code === "Space") { e.preventDefault(); $("bplay").click(); } if (e.key === "r" || e.key === "R") seek(0); });
+const m = /t=(\d+(\.\d+)?)/.exec(location.hash);
+window.addEventListener("load", () => { seek(m ? parseFloat(m[1]) : 0); $("limtxt").textContent = limit + " A"; if (!view.playing) $("bplay").textContent = "Play"; requestAnimationFrame(frame); });
+</script>
+</body>
+</html>

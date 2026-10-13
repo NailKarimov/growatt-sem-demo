@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Growatt SEM Monitor: interactive demos</title>
+<style>
+:root{--bg:#080d18;--panel:#0e1627;--line:#1f2c47;--text:#e7ecf6;--mut:#8a97b3;--blue:#2f9bff;--green:#22c55e;--orange:#ffa23a;--purple:#a78bfa}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 "Segoe UI",system-ui,sans-serif}
+main{max-width:1180px;margin:0 auto;padding:36px 20px 56px}
+h1{font-size:30px;margin:0 0 6px}p.lead{color:var(--mut);max-width:70ch;margin:0 0 26px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:18px}
+a.card{display:block;border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow:hidden;color:inherit;text-decoration:none;transition:.15s}
+a.card:hover{border-color:var(--blue);box-shadow:0 0 24px rgba(47,155,255,.22);transform:translateY(-2px)}
+a.card img{display:block;width:100%;height:auto;border-bottom:1px solid var(--line)}
+.body{padding:14px 18px 18px}.body h2{margin:0 0 4px;font-size:19px}.body p{margin:0;color:var(--mut);font-size:14.5px}
+.tag{display:inline-block;margin-top:10px;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700;border:1px solid}
+.tag.sim{background:#3a2a0a;color:#fbbf24;border-color:#7a5a12}.tag.real{background:#0f3322;color:#7be3a6;border-color:#1c7a45}
+.note{margin-top:28px;padding:14px 18px;border:1px dashed #2b3b5e;border-radius:12px;color:var(--mut);font-size:14px}
+.note b{color:var(--text)}
+@media (max-width:560px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Growatt SEM Monitor: interactive demos</h1>
+  <p class="lead">Four self-contained pages from a project that reads a Growatt SEM-E site over RS485 / Modbus RTU and switches the
+    charge mode of the inverters locally. Click a card; each page opens on its own and works offline.</p>
+  <div class="grid">
+    <a class="card" href="architecture.html"><img src="img/architecture.png" alt="Architecture with animated data flows">
+      <div class="body"><h2>Architecture and data flow</h2>
+      <p>The site, the RS485 bus, the shared code and the tools as coloured cards. Pick one of six situations and the cards that take
+        part light up, with animated arrows showing which way the data goes.</p><span class="tag real">based on a real site</span></div></a>
+    <a class="card" href="control-loop.html"><img src="img/control-loop.png" alt="Control loop: grid current exceeds the limit and the controller lowers the charge rate">
+      <div class="body"><h2>The control loop (100 s)</h2>
+      <p>Sun and house load change, the current of one phase crosses the limit, the controller sends a lower charge rate and the inverters
+        follow. Made for screen recording.</p><span class="tag sim">simulated inputs</span></div></a>
+    <a class="card" href="market-prices.html"><img src="img/market-prices.png" alt="One day of market prices driving the inverter state">
+      <div class="body"><h2>Market prices and the inverter</h2>
+      <p>One day in 100 seconds: charge from the grid when the price is low, sell from the battery when it is high, and cut the charge rate
+        when one phase gets more load.</p><span class="tag sim">example prices, simulated house</span></div></a>
+    <a class="card" href="session-structure.html"><img src="img/session-structure.png" alt="Route of the work in eight steps">
+      <div class="body"><h2>How the work unfolded</h2>
+      <p>The route from the first look at the bus to switching the mode over RS485 in two seconds, with the dead ends, and the difference
+        between the writes that failed and the one that worked.</p><span class="tag real">from the real experiments</span></div></a>
+  </div>
+  <div class="note"><b>About these pages.</b> Only the mode switch (Load First &lt;-&gt; Battery First, one FC16 frame) has been tried on a real site.
+    Grid First (export), writing the charge rate, the price planner and the controller shown in the animations are plans, and the
+    inputs of the animations (sun, consumption, prices) are made up. References such as <code>docs/experiments.md</code> point to the
+    project's private repository. The arrows of the architecture page are drawn by
+    <a href="https://anseki.github.io/leader-line/" style="color:#8fc8ff">LeaderLine</a> (MIT licence, &copy; anseki), embedded in that page.</div>
+</main>
+</body>
+</html>
