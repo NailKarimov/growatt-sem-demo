@@ -31,6 +31,7 @@ four self-contained pages, so that they can be shown by link.
 * **Online:** https://nailkarimov.github.io/growatt-sem-demo/ (GitHub Pages, branch `main`, root).
 * **Offline:** download the repository (Code -> Download ZIP) or a single `.html` file and open it in a browser. Every page is one
   self-contained file, nothing is loaded from the internet.
+* **Move in time:** in `control-loop.html` and `market-prices.html` drag the mouse along the bar at the top (or on any chart) to go forward and back; the animation pauses while you drag. Arrow keys step by 1 s (Shift: 5 s). The time slider is in the control panel (hidden by `?clean`).
 * **For a video:** add `?clean` to the address of `control-loop.html` or `market-prices.html` (hides the buttons), press F11 and record;
   Space pauses, R restarts.
 

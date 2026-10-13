@@ -151,9 +151,10 @@ svg .m{fill:var(--mut)}svg .v{font-weight:700}
 
   <div class="ctl">
     <button id="bplay">Pause</button><button id="brestart">Restart</button>
+    <label>time <input type="range" id="tl" min="0" max="100" step="0.1" value="0" style="width:360px"> <b id="tlt" style="color:var(--text)">0</b></label>
     <label>speed <select id="sspeed"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select></label>
     <label>grid limit <input type="range" id="slimit" min="10" max="30" value="18"> <b id="slimv" style="color:var(--text)">18 A per phase</b></label>
-    <span>Space = pause · R = restart · add <code>?clean</code> to the address for recording</span>
+    <span>drag the top bar, a chart or the slider to move in time · ← → step (Shift = 5 s) · Space = pause · R = restart · add <code>?clean</code> to the address for recording</span>
   </div>
   <div class="foot">Not the real site: sun, house load and the controller are simulated (parameters in the script). Real measurements of
     the charging step are in <code>docs/experiments.md</code>. The demo limit is 18 A so that it triggers; the site limit is 32 A per phase.
@@ -339,17 +340,19 @@ function addLog(c) {
   setTimeout(() => d.classList.remove("new"), 3500);
 }
 
-function seek(t) {
+function seek(t, prefill = true) {
   view.t = t; view.logged = 0; $("log").innerHTML = ""; $("pulses").innerHTML = ""; pulses.length = 0;
   sim.cmds.forEach((c, n) => { if (c.t <= t) { view.logged = n + 1; } });
   sim.cmds.filter(c => c.t <= t).slice(-6).forEach(addLog);
   const s = sim.steps[Math.min(sim.steps.length - 1, Math.floor(t / C.dt))];
-  for (let n = 0; n < 80; n++) moveParticles(0.05, s);
+  if (prefill) for (let n = 0; n < 80; n++) moveParticles(0.05, s);
 }
 function frame(now) {
   const dt = Math.min(0.1, (now - view.last) / 1000); view.last = now;
   if (view.playing) { view.t += dt * view.speed; if (view.t >= C.T) { seek(0); } }
   moveParticles(dt * (view.playing ? view.speed : 0.3), sim.steps[Math.min(sim.steps.length - 1, Math.floor(view.t / C.dt))]);
+  if (!dragging) $("tl").value = view.t;
+  $("tlt").textContent = Math.floor(view.t) + " s";
   render(); requestAnimationFrame(frame);
 }
 
@@ -359,6 +362,33 @@ $("brestart").onclick = () => seek(0);
 $("sspeed").onchange = e => view.speed = parseFloat(e.target.value);
 $("slimit").oninput = e => { limit = parseInt(e.target.value, 10); $("slimv").textContent = limit + " A per phase"; $("limtxt").textContent = limit + " A"; const t = view.t; sim = simulate(limit); seek(t); };
 document.addEventListener("keydown", e => { if (e.code === "Space") { e.preventDefault(); $("bplay").click(); } if (e.key === "r" || e.key === "R") seek(0); });
+
+/* ---- scrubbing: drag the top bar, click or drag on a chart, use the slider or the arrow keys ---- */
+const SCRUB = {T: 100, L: 34, R: 6};
+let dragging = false, wasPlaying = false;
+const clampT = t => Math.max(0, Math.min(SCRUB.T - 0.05, t));
+function dragStart() { if (dragging) return; dragging = true; wasPlaying = view.playing; view.playing = false; }
+function dragEnd() { if (!dragging) return; dragging = false; seek(view.t, true); view.playing = wasPlaying; $("bplay").textContent = view.playing ? "Pause" : "Play"; }
+const topBar = $("chapters"); topBar.style.cursor = "ew-resize"; topBar.style.touchAction = "none"; topBar.title = "Drag to move in time";
+const barAt = e => { const r = topBar.getBoundingClientRect(); seek(clampT((e.clientX - r.left) / r.width * SCRUB.T), false); };
+topBar.addEventListener("pointerdown", e => { dragStart(); try { topBar.setPointerCapture(e.pointerId); } catch (_) {} barAt(e); });
+topBar.addEventListener("pointermove", e => { if (dragging) barAt(e); });
+topBar.addEventListener("pointerup", dragEnd); topBar.addEventListener("pointercancel", dragEnd);
+document.querySelectorAll("canvas").forEach(cv => {
+  cv.style.cursor = "ew-resize"; cv.style.touchAction = "none"; cv.title = "Click or drag to move in time";
+  const at = e => { const r = cv.getBoundingClientRect(); seek(clampT((e.clientX - r.left - SCRUB.L) / (r.width - SCRUB.L - SCRUB.R) * SCRUB.T), false); };
+  cv.addEventListener("pointerdown", e => { dragStart(); try { cv.setPointerCapture(e.pointerId); } catch (_) {} at(e); });
+  cv.addEventListener("pointermove", e => { if (dragging) at(e); });
+  cv.addEventListener("pointerup", dragEnd); cv.addEventListener("pointercancel", dragEnd);
+});
+$("tl").addEventListener("input", e => { dragStart(); seek(parseFloat(e.target.value), false); });
+$("tl").addEventListener("change", dragEnd);
+document.addEventListener("keydown", e => {
+  if (e.target && e.target.tagName === "INPUT") return;                 // the slider handles its own arrow keys
+  if (e.code === "ArrowRight" || e.code === "ArrowLeft") { e.preventDefault(); seek(clampT(view.t + (e.shiftKey ? 5 : 1) * (e.code === "ArrowRight" ? 1 : -1)), true); }
+  if (e.code === "Home") seek(0, true);
+  if (e.code === "End") seek(SCRUB.T - 0.1, true);
+});
 const m = /t=(\d+(\.\d+)?)/.exec(location.hash);
 window.addEventListener("load", () => { seek(m ? parseFloat(m[1]) : 0); $("limtxt").textContent = limit + " A"; if (!view.playing) $("bplay").textContent = "Play"; requestAnimationFrame(frame); });
 </script>

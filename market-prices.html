@@ -174,11 +174,12 @@ svg text{font-family:"Segoe UI",system-ui,sans-serif;fill:var(--text)}svg .m{fil
 
   <div class="ctl">
     <button id="bplay">Pause</button><button id="brestart">Restart</button>
+    <label>time <input type="range" id="tl" min="0" max="100" step="0.1" value="0" style="width:360px"> <b id="tlt" style="color:var(--text)">0</b></label>
     <label>speed <select id="sspeed"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="2">2x</option></select></label>
     <label>charge below <input type="range" id="scheap" min="30" max="120" value="65"> <b id="vcheap">0.065</b></label>
     <label>sell above <input type="range" id="ssell" min="150" max="400" value="300"> <b id="vsell">0.30</b></label>
     <label>phase limit <input type="range" id="slimit" min="10" max="25" value="16"> <b id="vlimit">16 A</b></label>
-    <span>Space = pause · R = restart · add <code>?clean</code> to the address for recording</span>
+    <span>drag the top bar, a chart or the slider to move in time · ← → step (Shift = 5 s) · Space = pause · R = restart · add <code>?clean</code> to the address for recording</span>
   </div>
   <div class="foot">Not the real site. Prices are an invented "duck curve" (cheap at night and at midday, peaks in the morning and evening); the house, the sun and the
     planner are simulated. Assumptions: battery 30 kWh (10 % to 100 %), full charge or discharge rate 4.6 kW, exported energy is paid at 90 % of the spot price,
@@ -358,15 +359,17 @@ function addLog(e) {
   const log = $("log"); log.insertBefore(d, log.firstChild); while (log.children.length > 6) log.lastChild.remove();
   setTimeout(() => d.classList.remove("new"), 3500);
 }
-function seek(t) {
+function seek(t, prefill = true) {
   view.t = t; view.logged = 0; $("log").innerHTML = ""; $("pulses").innerHTML = ""; pulses.length = 0; const h = t / 100 * 24;
   sim.events.forEach((e, n) => { if (e.h <= h) view.logged = n + 1; }); sim.events.filter(e => e.h <= h).slice(-6).forEach(addLog);
-  const s = sim.steps[Math.min(95, Math.floor(t / 100 * 96))]; for (let n = 0; n < 80; n++) moveParticles(0.05, s);
+  const s = sim.steps[Math.min(95, Math.floor(t / 100 * 96))]; if (prefill) for (let n = 0; n < 80; n++) moveParticles(0.05, s);
 }
 function frame(now) {
   const dt = Math.min(0.1, (now - view.last) / 1000); view.last = now;
   if (view.playing) { view.t += dt * view.speed; if (view.t >= 100) seek(0); }
   moveParticles(dt * (view.playing ? view.speed : 0.3), sim.steps[Math.min(95, Math.floor(view.t / 100 * 96))]);
+  if (!dragging) $("tl").value = view.t;
+  $("tlt").textContent = hhmm(view.t / 100 * 24);
   render(); requestAnimationFrame(frame);
 }
 function changed() { const t = view.t; recompute(); seek(t); document.querySelectorAll(".bar u.lim").forEach(u => u.style.left = (opt.limit / 25 * 100) + "%"); $("limtxt").textContent = opt.limit + " A"; }
@@ -377,6 +380,33 @@ $("scheap").oninput = e => { opt.cheap = parseInt(e.target.value, 10) / 1000; $(
 $("ssell").oninput = e => { opt.sell = parseInt(e.target.value, 10) / 1000; $("vsell").textContent = opt.sell.toFixed(2); changed(); };
 $("slimit").oninput = e => { opt.limit = parseInt(e.target.value, 10); $("vlimit").textContent = opt.limit + " A"; changed(); };
 document.addEventListener("keydown", e => { if (e.code === "Space") { e.preventDefault(); $("bplay").click(); } if (e.key === "r" || e.key === "R") seek(0); });
+
+/* ---- scrubbing: drag the top bar, click or drag on a chart, use the slider or the arrow keys ---- */
+const SCRUB = {T: 100, L: 32, R: 4};
+let dragging = false, wasPlaying = false;
+const clampT = t => Math.max(0, Math.min(SCRUB.T - 0.05, t));
+function dragStart() { if (dragging) return; dragging = true; wasPlaying = view.playing; view.playing = false; }
+function dragEnd() { if (!dragging) return; dragging = false; seek(view.t, true); view.playing = wasPlaying; $("bplay").textContent = view.playing ? "Pause" : "Play"; }
+const topBar = $("chapters"); topBar.style.cursor = "ew-resize"; topBar.style.touchAction = "none"; topBar.title = "Drag to move in time";
+const barAt = e => { const r = topBar.getBoundingClientRect(); seek(clampT((e.clientX - r.left) / r.width * SCRUB.T), false); };
+topBar.addEventListener("pointerdown", e => { dragStart(); try { topBar.setPointerCapture(e.pointerId); } catch (_) {} barAt(e); });
+topBar.addEventListener("pointermove", e => { if (dragging) barAt(e); });
+topBar.addEventListener("pointerup", dragEnd); topBar.addEventListener("pointercancel", dragEnd);
+document.querySelectorAll("canvas").forEach(cv => {
+  cv.style.cursor = "ew-resize"; cv.style.touchAction = "none"; cv.title = "Click or drag to move in time";
+  const at = e => { const r = cv.getBoundingClientRect(); seek(clampT((e.clientX - r.left - SCRUB.L) / (r.width - SCRUB.L - SCRUB.R) * SCRUB.T), false); };
+  cv.addEventListener("pointerdown", e => { dragStart(); try { cv.setPointerCapture(e.pointerId); } catch (_) {} at(e); });
+  cv.addEventListener("pointermove", e => { if (dragging) at(e); });
+  cv.addEventListener("pointerup", dragEnd); cv.addEventListener("pointercancel", dragEnd);
+});
+$("tl").addEventListener("input", e => { dragStart(); seek(parseFloat(e.target.value), false); });
+$("tl").addEventListener("change", dragEnd);
+document.addEventListener("keydown", e => {
+  if (e.target && e.target.tagName === "INPUT") return;                 // the slider handles its own arrow keys
+  if (e.code === "ArrowRight" || e.code === "ArrowLeft") { e.preventDefault(); seek(clampT(view.t + (e.shiftKey ? 5 : 1) * (e.code === "ArrowRight" ? 1 : -1)), true); }
+  if (e.code === "Home") seek(0, true);
+  if (e.code === "End") seek(SCRUB.T - 0.1, true);
+});
 const mm = /t=(\d+(\.\d+)?)/.exec(location.hash);
 recompute();
 window.addEventListener("load", () => { seek(mm ? parseFloat(mm[1]) : 0); $("limtxt").textContent = opt.limit + " A"; if (!view.playing) $("bplay").textContent = "Play"; requestAnimationFrame(frame); });
