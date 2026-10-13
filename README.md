@@ -1,22 +1,34 @@
 # growatt-sem-demo
 
+### ▶ Open the live pages (rendered, with animation)
+
+| | |
+|---|---|
+| **[All pages: start here](https://nailkarimov.github.io/growatt-sem-demo/)** | the index with four cards |
+| [Architecture and data flow](https://nailkarimov.github.io/growatt-sem-demo/architecture.html) | coloured cards, animated arrows, six situations |
+| [The control loop, 100 s](https://nailkarimov.github.io/growatt-sem-demo/control-loop.html) | sun and load change, the current limit, the charge rate is cut |
+| [Market prices and the inverter](https://nailkarimov.github.io/growatt-sem-demo/market-prices.html) | one day: charge cheap, sell dear, phase guard |
+| [How the work unfolded](https://nailkarimov.github.io/growatt-sem-demo/session-structure.html) | the route, the dead ends, the write that worked |
+
+(Clicking the `.html` files in the file list of this repository shows their source code; GitHub does not run them. Use the links above.)
+
 Interactive demo pages from the *Growatt SEM Monitor* project (reading a Growatt SEM-E site over RS485 / Modbus RTU
 and switching the inverters' charge mode locally). The project itself is private; this repository holds only the
 four self-contained pages, so that they can be shown by link.
 
 | Page | What it shows | Based on |
 |---|---|---|
-| [`architecture.html`](architecture.html) | The site, the bus, the shared code and the tools as coloured cards; six situations with animated data flows | the real site and code |
-| [`control-loop.html`](control-loop.html) | A 100-second loop: sun and house load change, one phase crosses the current limit, the controller lowers the charge rate | simulated inputs |
-| [`market-prices.html`](market-prices.html) | One day in 100 seconds: market prices decide charge / self-use / sell; a phase guard cuts the charge rate | example prices, simulated house |
-| [`session-structure.html`](session-structure.html) | The route of the work and why the first write attempts failed and one worked | the real experiments |
+| [`architecture.html`](https://nailkarimov.github.io/growatt-sem-demo/architecture.html) | The site, the bus, the shared code and the tools as coloured cards; six situations with animated data flows | the real site and code |
+| [`control-loop.html`](https://nailkarimov.github.io/growatt-sem-demo/control-loop.html) | A 100-second loop: sun and house load change, one phase crosses the current limit, the controller lowers the charge rate | simulated inputs |
+| [`market-prices.html`](https://nailkarimov.github.io/growatt-sem-demo/market-prices.html) | One day in 100 seconds: market prices decide charge / self-use / sell; a phase guard cuts the charge rate | example prices, simulated house |
+| [`session-structure.html`](https://nailkarimov.github.io/growatt-sem-demo/session-structure.html) | The route of the work and why the first write attempts failed and one worked | the real experiments |
 
-![Market prices](img/market-prices.png)
+[![Market prices: one day in 100 seconds](img/market-prices.png)](https://nailkarimov.github.io/growatt-sem-demo/market-prices.html)
+*Click the picture to open the live page.*
 
 ## Open them
 
-* **Online:** once GitHub Pages is switched on (Settings -> Pages -> Deploy from a branch -> `main` / root), the pages are at
-  `https://nailkarimov.github.io/growatt-sem-demo/` (index) and `.../market-prices.html` etc.
+* **Online:** https://nailkarimov.github.io/growatt-sem-demo/ (GitHub Pages, branch `main`, root).
 * **Offline:** download the repository (Code -> Download ZIP) or a single `.html` file and open it in a browser. Every page is one
   self-contained file, nothing is loaded from the internet.
 * **For a video:** add `?clean` to the address of `control-loop.html` or `market-prices.html` (hides the buttons), press F11 and record;
